@@ -24,6 +24,9 @@
     autospeed-estfps=false      true/false - Calculate/change speed if a video has a variable fps at the cost of higher CPU usage (most videos have a fixed fps).
     autospeed-spause            true/false - Pause video while switching display modes.
                                 Number     - If you set this a number, it will pause for that amount of seconds.
+    autospeed-method="always"   String     - Set how often to check if framerate conforms to settings
+					     "always": (original behaviour) contstantly checks during playback
+					     "start": only does initial change at start
 
     Example: mpv file.mkv --script-opts=autospeed-nircmd=true,autospeed-minspeed=0.8
 --]]
@@ -51,6 +54,7 @@ local _global = {
     utils = require 'mp.utils',
     rateCache = {},
     lastDrr = 0,
+    initialRefreshFound = false,
     speedCache = {},
     next = next,
 }
@@ -87,6 +91,7 @@ function getOptions()
         ["osdkey"]    = "y",
         ["estfps"]    = false,
         ["spause"]    = 0,
+	["method"]   = "always",
     }
     for key, value in pairs(_global.options) do
         local opt = mp.get_opt("autospeed-" .. key)
@@ -112,6 +117,7 @@ function main(name, fps)
     end
     _global.temp["fps"] = fps
     findRefreshRate()
+    _global.initialRefreshFound = true
     determineSpeed()
     if (_global.options["speed"] == true and _global.temp["speed"] >= _global.options["minspeed"] and _global.temp["speed"] <= _global.options["maxspeed"]) then
         mp.set_property_number("speed", _global.temp["speed"])
@@ -249,52 +255,54 @@ function findRefreshRate()
 end
 
 function setRate(rate)
-    local paused = mp.get_property("pause")
-    if (_global.options["spause"] > 0 and paused ~= "yes") then
-        mp.set_property("pause", "yes")
-    end
-    _global.utils.subprocess({
-        ["cancellable"] = false,
-        ["args"] = {
-            [1] = _global.options["nircmdc"],
-            [2] = "setdisplay",
-            [3] = "monitor:" .. _global.options["monitor"],
-            [4] = _global.options["dwidth"],
-            [5] = _global.options["dheight"],
-            [6] = _global.options["bdepth"],
-            [7] = rate
-        }
-    })
-    if (_global.options["spause"] > 0 and paused ~= "yes") then
-		--os.execute("ping -n " .. _global.options["spause"] .. " localhost > NUL")
+	if ((_global.initialRefreshFound == false) or (_global.options["method"] == "always")) then
+	    local paused = mp.get_property("pause")
+	    if (_global.options["spause"] > 0 and paused ~= "yes") then
+		mp.set_property("pause", "yes")
+	    end
+	    _global.utils.subprocess({
+		["cancellable"] = false,
+		["args"] = {
+		    [1] = _global.options["nircmdc"],
+		    [2] = "setdisplay",
+		    [3] = "monitor:" .. _global.options["monitor"],
+		    [4] = _global.options["dwidth"],
+		    [5] = _global.options["dheight"],
+		    [6] = _global.options["bdepth"],
+		    [7] = rate
+		}
+	    })
+	    if (_global.options["spause"] > 0 and paused ~= "yes") then
+			--os.execute("ping -n " .. _global.options["spause"] .. " localhost > NUL")
+			_global.utils.subprocess({
+				["cancellable"] = false,
+				["args"] = {
+					[1] = "ping",
+					[2] = "-n",
+					[3] = _global.options["spause"],
+					[4] = "localhost",
+					[5] = ">",
+					[6] = "NUL"
+				}
+			})
+		mp.set_property("pause", "no")
+	    end
+		--os.execute("ping -n 2 localhost > NUL")
 		_global.utils.subprocess({
-			["cancellable"] = false,
-			["args"] = {
-				[1] = "ping",
-				[2] = "-n",
-				[3] = _global.options["spause"],
-				[4] = "localhost",
-				[5] = ">",
-				[6] = "NUL"
-			}
-		})
-        mp.set_property("pause", "no")
-    end
-	--os.execute("ping -n 2 localhost > NUL")
-	_global.utils.subprocess({
-			["cancellable"] = false,
-			["args"] = {
-				[1] = "ping",
-				[2] = "-n",
-				[3] = "2",
-				[4] = "localhost",
-				[5] = ">",
-				[6] = "NUL"
-			}
-		})
-    _global.temp["drr"] = mp.get_property_native("display-fps")
-    _global.rateCache[_global.temp["drr"]] = rate
-    _global.lastDrr = _global.temp["drr"]
+				["cancellable"] = false,
+				["args"] = {
+					[1] = "ping",
+					[2] = "-n",
+					[3] = "2",
+					[4] = "localhost",
+					[5] = ">",
+					[6] = "NUL"
+				}
+			})
+	    _global.temp["drr"] = mp.get_property_native("display-fps")
+	    _global.rateCache[_global.temp["drr"]] = rate
+	    _global.lastDrr = _global.temp["drr"]
+	end
 end
 
 function start()
