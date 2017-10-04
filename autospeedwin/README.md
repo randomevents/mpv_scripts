@@ -112,6 +112,11 @@ Valid options (and examples):
         it is switched. This can be used if you don't want to miss
         some of the video while your display is blank (my display is blank for ~5 seconds
         while switching modes).
+    autospeed-method="always"   
+        Default: "always"
+        Set how often to check if framerate conforms to settings
+        "always": (original behaviour) contstantly checks during playback
+        "start": only does initial change at start        
     
     Examples:
         Setting the options at the command line:
