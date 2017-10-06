@@ -91,7 +91,7 @@ function getOptions()
         ["osdkey"]    = "y",
         ["estfps"]    = false,
         ["spause"]    = 0,
-	["method"]   = "always",
+	["method"]   = "once",
     }
     for key, value in pairs(_global.options) do
         local opt = mp.get_opt("autospeed-" .. key)
@@ -112,17 +112,19 @@ end
 getOptions()
 
 function main(name, fps)
-    if (fps == nil) then
-        return
-    end
-    _global.temp["fps"] = fps
-    findRefreshRate()
-    _global.initialRefreshFound = true
-    determineSpeed()
-    if (_global.options["speed"] == true and _global.temp["speed"] >= _global.options["minspeed"] and _global.temp["speed"] <= _global.options["maxspeed"]) then
-        mp.set_property_number("speed", _global.temp["speed"])
-    else
-        _global.temp["speed"] = _global.confSpeed
+    if ((_global.initialRefreshFound == false) or (_global.options["method"] == "always")) then
+	    if (fps == nil) then
+		return
+	    end
+	    _global.temp["fps"] = fps
+	    findRefreshRate()
+	    determineSpeed()
+	    if (_global.options["speed"] == true and _global.temp["speed"] >= _global.options["minspeed"] and _global.temp["speed"] <= _global.options["maxspeed"]) then
+		mp.set_property_number("speed", _global.temp["speed"])
+	    else
+		_global.temp["speed"] = _global.confSpeed
+	    end
+	    _global.initialRefreshFound = true
     end
 end
 
@@ -255,54 +257,52 @@ function findRefreshRate()
 end
 
 function setRate(rate)
-	if ((_global.initialRefreshFound == false) or (_global.options["method"] == "always")) then
-	    local paused = mp.get_property("pause")
-	    if (_global.options["spause"] > 0 and paused ~= "yes") then
-		mp.set_property("pause", "yes")
-	    end
-	    _global.utils.subprocess({
-		["cancellable"] = false,
-		["args"] = {
-		    [1] = _global.options["nircmdc"],
-		    [2] = "setdisplay",
-		    [3] = "monitor:" .. _global.options["monitor"],
-		    [4] = _global.options["dwidth"],
-		    [5] = _global.options["dheight"],
-		    [6] = _global.options["bdepth"],
-		    [7] = rate
-		}
-	    })
-	    if (_global.options["spause"] > 0 and paused ~= "yes") then
-			--os.execute("ping -n " .. _global.options["spause"] .. " localhost > NUL")
-			_global.utils.subprocess({
-				["cancellable"] = false,
-				["args"] = {
-					[1] = "ping",
-					[2] = "-n",
-					[3] = _global.options["spause"],
-					[4] = "localhost",
-					[5] = ">",
-					[6] = "NUL"
-				}
-			})
-		mp.set_property("pause", "no")
-	    end
-		--os.execute("ping -n 2 localhost > NUL")
+    local paused = mp.get_property("pause")
+    if (_global.options["spause"] > 0 and paused ~= "yes") then
+	mp.set_property("pause", "yes")
+    end
+    _global.utils.subprocess({
+	["cancellable"] = false,
+	["args"] = {
+	    [1] = _global.options["nircmdc"],
+	    [2] = "setdisplay",
+	    [3] = "monitor:" .. _global.options["monitor"],
+	    [4] = _global.options["dwidth"],
+	    [5] = _global.options["dheight"],
+	    [6] = _global.options["bdepth"],
+	    [7] = rate
+	}
+    })
+    if (_global.options["spause"] > 0 and paused ~= "yes") then
+		--os.execute("ping -n " .. _global.options["spause"] .. " localhost > NUL")
 		_global.utils.subprocess({
-				["cancellable"] = false,
-				["args"] = {
-					[1] = "ping",
-					[2] = "-n",
-					[3] = "2",
-					[4] = "localhost",
-					[5] = ">",
-					[6] = "NUL"
-				}
-			})
-	    _global.temp["drr"] = mp.get_property_native("display-fps")
-	    _global.rateCache[_global.temp["drr"]] = rate
-	    _global.lastDrr = _global.temp["drr"]
-	end
+			["cancellable"] = false,
+			["args"] = {
+				[1] = "ping",
+				[2] = "-n",
+				[3] = _global.options["spause"],
+				[4] = "localhost",
+				[5] = ">",
+				[6] = "NUL"
+			}
+		})
+	mp.set_property("pause", "no")
+    end
+	--os.execute("ping -n 2 localhost > NUL")
+	_global.utils.subprocess({
+			["cancellable"] = false,
+			["args"] = {
+				[1] = "ping",
+				[2] = "-n",
+				[3] = "2",
+				[4] = "localhost",
+				[5] = ">",
+				[6] = "NUL"
+			}
+		})
+    _global.temp["drr"] = mp.get_property_native("display-fps")
+    _global.rateCache[_global.temp["drr"]] = rate
+    _global.lastDrr = _global.temp["drr"]
 end
 
 function start()
